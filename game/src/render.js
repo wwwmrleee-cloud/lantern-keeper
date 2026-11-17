@@ -358,7 +358,7 @@ export function createRenderer(canvas) {
     ctx.fillRect(0, 0, FIELD.width, 54);
     text(`第 ${Math.min(state.wave, WAVES.total)} / ${WAVES.total} 波`, 110, 28, 22, PALETTE.text, 'center');
     text(`分数 ${state.score}`, 330, 28, 22, PALETTE.text, 'center');
-    text(`萤火 ${state.fireflies}  ·  到灭灯前按 1 / 2 / 3（2 萤火）`, 640, 28, 20, PALETTE.muted, 'center');
+    text(`萤火 ${state.fireflies}  ·  走到灭灯前按 1 / 2 / 3（2 萤火）`, 640, 28, 20, PALETTE.muted, 'center');
     text(`最佳 ${best}`, 1000, 28, 20, PALETTE.muted, 'center');
     // Lantern icons, lit or dark.
     for (let i = 0; i < 3; i += 1) {
@@ -389,9 +389,14 @@ export function createRenderer(canvas) {
       for (const enemy of state.enemies) moth(enemy);
     }
     keeper(state.keeper, state.time - state.swatAt);
-    for (const pop of state.pops) {
-      ctx.globalAlpha = Math.max(0, Math.min(1, pop.life));
-      text(pop.text, pop.x, pop.y, 20, pop.colour, 'center');
+    // Pops freeze the moment the night is won or lost (the world stops
+    // stepping), so on the end screens they would hang in the air over
+    // the panel forever: only draw them while the game is still running.
+    if (screen !== SCREEN_WIN && screen !== SCREEN_OVER) {
+      for (const pop of state.pops) {
+        ctx.globalAlpha = Math.max(0, Math.min(1, pop.life));
+        text(pop.text, pop.x, pop.y, 20, pop.colour, 'center');
+      }
     }
     ctx.globalAlpha = 1;
 
@@ -426,7 +431,11 @@ export function createRenderer(canvas) {
       ctx.fillRect(0, 0, FIELD.width, FIELD.height);
       panel(340, 190, 600, 330);
       text('天亮了', 640, 255, 52, '#fff3d6', 'center');
-      text(`三盏灯都亮着　　分数 ${state.score}　　最佳 ${best}`, 640, 325, 22, PALETTE.text, 'center');
+      // Say how many lanterns actually survived the night: winning
+      // with one dark is not the same night as winning with three lit.
+      const lit = state.lanterns.filter(Boolean).length;
+      const litText = lit === 3 ? '三盏灯都亮着' : lit === 2 ? '两盏灯亮着' : '一盏灯亮着';
+      text(`${litText}　　分数 ${state.score}　　最佳 ${best}`, 640, 325, 22, PALETTE.text, 'center');
       text('你守住了这个院子。', 640, 365, 20, PALETTE.muted, 'center');
       text('按 空格 或 R 再守一夜', 640, 450, 26, PALETTE.lanternLit, 'center');
     } else {

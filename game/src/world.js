@@ -123,6 +123,8 @@ export function createWorld(random) {
       height: FIREFLY.size,
       speed: FIREFLY.speed + random.range(-12, 24),
       phase: random.range(0, Math.PI * 2),
+      /** Seconds spent resting on the ground before fading away. */
+      rest: 0,
     });
   }
 
@@ -280,8 +282,10 @@ export function createWorld(random) {
     for (let i = state.pickups.length - 1; i >= 0; i -= 1) {
       const fly = state.pickups[i];
       fly.phase += dt * 4;
-      fly.y += fly.speed * dt;
-      fly.x += Math.sin(fly.phase) * 22 * dt;
+      if (fly.rest <= 0) {
+        fly.y += fly.speed * dt;
+        fly.x += Math.sin(fly.phase) * 22 * dt;
+      }
       if (overlaps(fly, state.keeper)) {
         if (!ambient) {
           state.score += FIREFLY.points;
@@ -290,8 +294,15 @@ export function createWorld(random) {
         pop(fly.x, fly.y, '+萤火', '#c8ff7a');
         state.pickups.splice(i, 1);
         events |= EVENT_PICKUP;
-      } else if (fly.y > FIELD.groundY) {
-        state.pickups.splice(i, 1);
+      } else if (fly.y + fly.height >= FIELD.groundY) {
+        // Landed: it rests on the ground for a few seconds, still
+        // catchable, instead of vanishing the moment it touches
+        // down. A keeper busy swatting a moth gets a second chance
+        // at it, so the relight economy does not starve in the late
+        // waves, when there is no time to chase falling fireflies.
+        fly.y = FIELD.groundY - fly.height;
+        fly.rest += dt;
+        if (fly.rest > 3) state.pickups.splice(i, 1);
       }
     }
 
