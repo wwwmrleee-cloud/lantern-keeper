@@ -7,7 +7,7 @@
 // and sets window.__shotReady for a screenshot.
 import { BEST_KEY, STEP } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, EVENT_HIT, EVENT_OUT, EVENT_OVER, EVENT_RELIGHT, EVENT_WAVE, EVENT_WIN } from './world.js';
+import { createWorld, EVENT_HIT, EVENT_OUT, EVENT_OVER, EVENT_PICKUP, EVENT_RELIGHT, EVENT_WAVE, EVENT_WIN } from './world.js';
 import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_RESTART, createInput } from './input.js';
 import { createAudio } from './audio.js';
 import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE, SCREEN_WIN } from './render.js';
@@ -56,7 +56,7 @@ function runShot(name) {
 }
 
 function runGame() {
-  const input = createInput(canvas);
+  const input = createInput(canvas, renderer.toField);
   let screen = SCREEN_TITLE;
   let best = readBest();
   let accumulator = 0;
@@ -105,6 +105,7 @@ function runGame() {
     const relight = input.takeRelight();
     const events = world.step(STEP, input.direction(world.state.keeper.x + world.state.keeper.width / 2), relight, false);
     if (events & EVENT_HIT) audio.swat();
+    if (events & EVENT_PICKUP) audio.pickup();
     if (events & EVENT_OUT) audio.lanternOut();
     if (events & EVENT_RELIGHT) audio.relight();
     if (events & EVENT_WAVE) {

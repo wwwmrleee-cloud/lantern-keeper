@@ -4,7 +4,7 @@ export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_RESTART = 4;
 
-export function createInput(canvas) {
+export function createInput(canvas, toField) {
   const keys = new Set();
   let actions = 0;
   let pointerX = null;
@@ -13,6 +13,10 @@ export function createInput(canvas) {
   function keyDown(event) {
     if (['ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
     if (event.repeat) return;
+    // Pressing a movement key takes steering back from the pointer:
+    // otherwise the arrow keys stay dead for the rest of the visit
+    // after a single mouse move.
+    if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(event.code)) pointerX = null;
     keys.add(event.code);
     if (event.code === 'Space' || event.code === 'Enter') actions |= ACTION_CONFIRM;
     if (event.code === 'KeyP' || event.code === 'Escape') actions |= ACTION_PAUSE;
@@ -27,8 +31,11 @@ export function createInput(canvas) {
   }
 
   function pointerMove(event) {
-    const rect = canvas.getBoundingClientRect();
-    pointerX = ((event.clientX - rect.left) / rect.width) * 1280;
+    if (toField) pointerX = toField(event.clientX, event.clientY).x;
+    else {
+      const rect = canvas.getBoundingClientRect();
+      pointerX = ((event.clientX - rect.left) / rect.width) * 1280;
+    }
   }
 
   function pointerDown(event) {

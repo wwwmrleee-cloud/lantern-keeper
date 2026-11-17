@@ -9,6 +9,7 @@ export const EVENT_OVER = 4;
 export const EVENT_WIN = 8;
 export const EVENT_WAVE = 16;
 export const EVENT_RELIGHT = 32;
+export const EVENT_PICKUP = 64;
 
 export const KIND_MOTH = 'moth';
 export const KIND_DART = 'dart';
@@ -55,6 +56,7 @@ export function createWorld(random) {
     won: false,
     waveClearBonusPaid: false,
     relightFailAt: -10,
+    relightFailMsg: '',
     /** Last time the keeper swung. */
     swatAt: -10,
   };
@@ -78,6 +80,7 @@ export function createWorld(random) {
     state.won = false;
     state.waveClearBonusPaid = false;
     state.relightFailAt = -10;
+    state.relightFailMsg = '';
     state.swatAt = -10;
   }
 
@@ -162,10 +165,16 @@ export function createWorld(random) {
         state.lanterns[relight] = true;
         events |= EVENT_RELIGHT;
         pop(LANES[relight], LANTERN_Y - 46, '点亮 +', '#ffe9a8');
-      } else if (!state.lanterns[relight] && state.time - state.relightFailAt > 1.5) {
-        // Tried and failed: say why, once, so the player can fix it.
-        state.relightFailAt = state.time;
-        pop(LANES[relight], LANTERN_Y - 46, near ? '萤火不够' : '走过去点灯', '#8b93a3');
+      } else if (!state.lanterns[relight]) {
+        // Tried and failed: say why, once per reason, so the player
+        // can fix it — walking over and pressing again right away
+        // must answer with the new reason, not silence.
+        const msg = near ? '萤火不够' : '走过去点灯';
+        if (msg !== state.relightFailMsg || state.time - state.relightFailAt > 1.5) {
+          state.relightFailAt = state.time;
+          state.relightFailMsg = msg;
+          pop(LANES[relight], LANTERN_Y - 46, msg, '#8b93a3');
+        }
       }
     }
 
@@ -280,7 +289,7 @@ export function createWorld(random) {
         }
         pop(fly.x, fly.y, '+萤火', '#c8ff7a');
         state.pickups.splice(i, 1);
-        events |= EVENT_HIT;
+        events |= EVENT_PICKUP;
       } else if (fly.y > FIELD.groundY) {
         state.pickups.splice(i, 1);
       }

@@ -19,9 +19,37 @@ const STARS = Array.from({ length: 90 }, (_, i) => ({
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
 
+  // The canvas bitmap follows the window, and the 1280x720 field is
+  // letterboxed inside it: on a 16:10 or 4:3 window the game keeps its
+  // shape instead of stretching, and the bars stay night-dark.
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+  }
+
   function fit() {
+    resize();
     const scale = Math.min(canvas.width / FIELD.width, canvas.height / FIELD.height);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    const offsetX = (canvas.width - FIELD.width * scale) / 2;
+    const offsetY = (canvas.height - FIELD.height * scale) / 2;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = PALETTE.skyTop;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+  }
+
+  /** Map a pointer position (CSS pixels, viewport) to field coordinates. */
+  function toField(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.min(rect.width / FIELD.width, rect.height / FIELD.height);
+    const offsetX = (rect.width - FIELD.width * scale) / 2;
+    const offsetY = (rect.height - FIELD.height * scale) / 2;
+    return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
   }
 
   function sky(dawn) {
@@ -188,8 +216,17 @@ export function createRenderer(canvas) {
     ctx.globalAlpha = 1;
   }
 
-  function keeper(k) {
+  function keeper(k, sinceSwat) {
     const cx = k.x + k.width / 2;
+    // A brief swoosh above his raised hand when he swats, so the
+    // 0.35 s between swings is visible, not just a rule.
+    if (sinceSwat < 0.15) {
+      ctx.strokeStyle = `rgba(255, 233, 168, ${1 - sinceSwat / 0.15})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(cx, k.y - 18, 34, -Math.PI * 0.85, -Math.PI * 0.15);
+      ctx.stroke();
+    }
     // Small hand lantern, swinging at his side.
     const swing = Math.sin(performance.now() / 300) * 4;
     ctx.fillStyle = 'rgba(255, 179, 71, 0.22)';
@@ -345,9 +382,13 @@ export function createRenderer(canvas) {
     house(dawn);
     const time = state.time;
     for (let i = 0; i < 3; i += 1) lantern(LANES[i], state.lanterns[i], time);
-    for (const fly of state.pickups) firefly(fly);
-    for (const enemy of state.enemies) moth(enemy);
-    keeper(state.keeper);
+    // Once the night is won or lost, the courtyard is empty again:
+    // no moths or fireflies drifting over the end panel.
+    if (screen !== SCREEN_WIN && screen !== SCREEN_OVER) {
+      for (const fly of state.pickups) firefly(fly);
+      for (const enemy of state.enemies) moth(enemy);
+    }
+    keeper(state.keeper, state.time - state.swatAt);
     for (const pop of state.pops) {
       ctx.globalAlpha = Math.max(0, Math.min(1, pop.life));
       text(pop.text, pop.x, pop.y, 20, pop.colour, 'center');
@@ -361,8 +402,9 @@ export function createRenderer(canvas) {
       text('灯火守夜人', 640, 195, 56, PALETTE.lanternCore, 'center');
       text('LANTERN KEEPER', 640, 242, 20, PALETTE.muted, 'center');
       text('飞蛾扑向屋前的三盏灯，守住它们，等到天亮。', 640, 295, 22, PALETTE.text, 'center');
-      text('移动：鼠标 / 方向键　　点灯：走到灭灯前按 1 / 2 / 3（2 萤火）', 640, 335, 20, PALETTE.text, 'center');
-      text('撞飞蛾得分，捡萤火攒点灯的柴火，撑过 10 波。', 640, 370, 20, PALETTE.text, 'center');
+      text('移动：鼠标 / 方向键 / A D', 640, 330, 20, PALETTE.text, 'center');
+      text('点灯：走到灭灯前，按 1 / 2 / 3（2 萤火）', 640, 360, 20, PALETTE.text, 'center');
+      text('撞飞蛾得分，捡萤火攒点灯的柴火，撑过 10 波。', 640, 390, 20, PALETTE.text, 'center');
       text('按 空格 或 点击 开始', 640, 445, 26, PALETTE.lanternLit, 'center');
       text(`最佳 ${best}`, 640, 490, 18, PALETTE.muted, 'center');
     } else if (screen === SCREEN_PAUSED) {
@@ -392,5 +434,5 @@ export function createRenderer(canvas) {
     }
   }
 
-  return { draw };
+  return { draw, toField };
 }
