@@ -1,7 +1,7 @@
 // The night itself: waves of moths and shadows drifting down three lanes
 // toward the lanterns, the keeper swatting them, fireflies to catch.
 // No drawing here, only rules, so the screenshot pilot can run it headless.
-import { ENEMY, FIELD, FIREFLY, KEEPER, LANES, LANTERN_Y, SCORE, WAVES } from './config.js';
+import { ENEMY, FIELD, FIREFLY, KEEPER, LANES, LANTERN_Y, SCORE, SWAT_COOLDOWN, WAVES } from './config.js';
 
 export const EVENT_HIT = 1;
 export const EVENT_OUT = 2;
@@ -54,6 +54,9 @@ export function createWorld(random) {
     over: false,
     won: false,
     waveClearBonusPaid: false,
+    relightFailAt: -10,
+    /** Last time the keeper swung. */
+    swatAt: -10,
   };
 
   function reset() {
@@ -74,6 +77,8 @@ export function createWorld(random) {
     state.over = false;
     state.won = false;
     state.waveClearBonusPaid = false;
+    state.relightFailAt = -10;
+    state.swatAt = -10;
   }
 
   function litCount() {
@@ -81,7 +86,14 @@ export function createWorld(random) {
   }
 
   function spawnEnemy() {
-    const lane = random.int(0, 2);
+    // Moths are drawn to the light: when only one lantern is still lit,
+    // most of the swarm funnels onto it, so letting two lanterns go dark
+    // does not leave the last one safe. With two or three lit, spawns
+    // are spread evenly, so losing one lantern is recoverable.
+    let lane;
+    const litLanes = [0, 1, 2].filter((l) => state.lanterns[l]);
+    if (litLanes.length === 1 && random.next() < 0.7) lane = litLanes[0];
+    else lane = random.int(0, 2);
     const kind = pickKind(random, state.wave);
     const size = kindSize(kind);
     state.enemies.push({
@@ -138,13 +150,22 @@ export function createWorld(random) {
       Math.max(0, state.keeper.x + move * KEEPER.speed * dt),
     );
 
-    // Relighting costs fireflies and only works on a dark lantern.
+    // Relighting costs fireflies, only works on a dark lantern, and only
+    // when the keeper has walked over to it: you cannot relight a far
+    // lantern from the other side of the courtyard, so standing still
+    // in one lane and pressing keys is not a way to survive the night.
     if (relight >= 0 && relight <= 2 && !ambient) {
-      if (!state.lanterns[relight] && state.fireflies >= FIREFLY.relightCost) {
+      const keeperCentre = state.keeper.x + KEEPER.width / 2;
+      const near = Math.abs(keeperCentre - LANES[relight]) <= 130;
+      if (!state.lanterns[relight] && near && state.fireflies >= FIREFLY.relightCost) {
         state.fireflies -= FIREFLY.relightCost;
         state.lanterns[relight] = true;
         events |= EVENT_RELIGHT;
         pop(LANES[relight], LANTERN_Y - 46, '点亮 +', '#ffe9a8');
+      } else if (!state.lanterns[relight] && state.time - state.relightFailAt > 1.5) {
+        // Tried and failed: say why, once, so the player can fix it.
+        state.relightFailAt = state.time;
+        pop(LANES[relight], LANTERN_Y - 46, near ? '萤火不够' : '走过去点灯', '#8b93a3');
       }
     }
 
@@ -166,7 +187,11 @@ export function createWorld(random) {
           state.spawnTimer -= dt;
           if (state.spawnTimer <= 0) {
             spawnEnemy();
-            state.spawnTimer = WAVES.interval(state.wave);
+            // Darkness breeds moths: every dark lantern makes the next
+            // ones come sooner, so standing still in one lane and letting
+            // the other two go dark is not a way to survive the night.
+            const dark = 3 - litCount();
+            state.spawnTimer = WAVES.interval(state.wave) * (dark === 0 ? 1 : dark === 1 ? 0.85 : 0.7);
           }
         } else if (state.enemies.length === 0) {
           // Wave cleared: bonus, then the next wave, or dawn after wave 10.
@@ -183,7 +208,7 @@ export function createWorld(random) {
         state.fireflyTimer -= dt;
         if (state.fireflyTimer <= 0) {
           spawnFirefly();
-          state.fireflyTimer = random.range(1.8, 3.2);
+          state.fireflyTimer = random.range(2.8, 4.5);
         }
       }
     } else if (state.enemies.length < 5 && random.next() < dt * 0.9) {
@@ -201,18 +226,21 @@ export function createWorld(random) {
       // lantern line. That is what makes the game playable by hand.
       const swatZone = {
         x: state.keeper.x - 14,
-        y: state.keeper.y - 110,
+        y: state.keeper.y - 160,
         width: state.keeper.width + 28,
-        height: state.keeper.height + 110,
+        height: state.keeper.height + 160,
       };
-      if (overlaps(enemy, swatZone)) {
+      if (overlaps(enemy, swatZone) && state.time - state.swatAt >= SWAT_COOLDOWN) {
+        state.swatAt = state.time;
         enemy.hp -= 1;
         if (enemy.hp <= 0) {
           const points = enemy.kind === KIND_DART ? SCORE.dart : enemy.kind === KIND_SHADE ? SCORE.shade : SCORE.moth;
           if (!ambient) {
             state.score += points;
             // A swatted moth sometimes drops a firefly: the relight economy.
-            if (enemy.kind === KIND_SHADE || random.next() < 0.25) state.fireflies += 1;
+            // Kept scarce on purpose, so relighting a lantern is a real
+            // choice, not something you can do every few seconds.
+            if (enemy.kind === KIND_SHADE || random.next() < 0.2) state.fireflies += 1;
           }
           pop(enemy.x + enemy.width / 2, enemy.y, `+${points}`, '#ffe9a8');
           state.enemies.splice(i, 1);

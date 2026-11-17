@@ -19,12 +19,16 @@ export const KEEPER = {
   y: FIELD.groundY - 58,
 };
 
+/** Seconds between the keeper's swats: one swing at a time, so a
+    crowd in one lane can get past a keeper who never moves. */
+export const SWAT_COOLDOWN = 0.35;
+
 export const ENEMY = {
   size: 38,
   dartSize: 28,
   shadeSize: 48,
-  baseSpeed: 135,
-  speedPerWave: 14,
+  baseSpeed: 115,
+  speedPerWave: 12,
   dartMultiplier: 1.65,
   shadeMultiplier: 0.75,
 };
@@ -33,8 +37,9 @@ export const FIREFLY = {
   size: 13,
   speed: 70,
   points: 5,
-  /** Fireflies spent to relight one lantern. */
-  relightCost: 1,
+  /** Fireflies spent to relight one lantern: dear enough that a
+      lantern going out hurts, cheap enough to save one in a wave. */
+  relightCost: 2,
 };
 
 export const WAVES = {
@@ -42,7 +47,7 @@ export const WAVES = {
   /** Enemies in wave n. */
   count: (wave) => 6 + wave * 2,
   /** Seconds between spawns in wave n. */
-  interval: (wave) => Math.max(0.5, 1.05 - wave * 0.05),
+  interval: (wave) => Math.max(0.6, 1.25 - wave * 0.05),
   /** Seconds of quiet between waves. */
   breakSeconds: 3,
 };

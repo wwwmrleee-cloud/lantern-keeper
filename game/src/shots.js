@@ -2,7 +2,7 @@
 // real rules forward from a fresh world for a fixed number of steps,
 // steered by a simple autopilot, so the frame is what a short game really
 // looks like and the same seed always gives the same frame.
-import { STEP } from './config.js';
+import { FIREFLY, LANES, STEP } from './config.js';
 import { EVENT_OVER, EVENT_WIN } from './world.js';
 import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE, SCREEN_WIN } from './render.js';
 
@@ -28,7 +28,12 @@ function steerToward(state, targetX) {
 function autopilot(state, skill) {
   if (skill > 0) {
     for (let lane = 0; lane < 3; lane += 1) {
-      if (!state.lanterns[lane] && state.fireflies >= 1) return { move: 0, relight: lane };
+      if (!state.lanterns[lane] && state.fireflies >= FIREFLY.relightCost) {
+        // Walk over to the dark lantern first, then relight it.
+        const centre = state.keeper.x + state.keeper.width / 2;
+        if (Math.abs(centre - LANES[lane]) <= 130) return { move: 0, relight: lane };
+        return { move: steerToward(state, LANES[lane]), relight: -1 };
+      }
     }
     const dark = state.lanterns.some((lit) => !lit);
     if (dark) {
@@ -59,9 +64,11 @@ function autopilot(state, skill) {
     }
     return { move: steerToward(state, target.x + target.width / 2), relight: -1 };
   }
+  // Reacts only when a moth is close to a lantern, and never relights
+  // or chases fireflies — as a hurried player is.
   let target = null;
   for (const enemy of state.enemies) {
-    if (enemy.y < 380) continue;
+    if (enemy.y < 460) continue;
     if (!target || enemy.y > target.y) target = enemy;
   }
   if (!target) return { move: 0, relight: -1 };

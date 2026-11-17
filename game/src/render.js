@@ -70,15 +70,28 @@ export function createRenderer(canvas) {
     ctx.lineTo(980, 155);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = PALETTE.roofTile;
-    for (let x = 320; x < 960; x += 42) {
-      ctx.fillRect(x, 128, 26, 8);
+    // Tile rows follow the roof slope: scalloped caps, not a dashed line.
+    const roofY = (x) => 78 + (Math.abs(x - 640) / 340) * 77;
+    for (let row = 0; row < 3; row += 1) {
+      for (let x = 330; x < 955; x += 38) {
+        const y = roofY(x) + 8 + row * 16;
+        ctx.fillStyle = row % 2 ? '#3d2723' : PALETTE.roofTile;
+        ctx.beginPath();
+        ctx.arc(x, y, 13, 0, Math.PI);
+        ctx.fill();
+      }
     }
-    // Door, warm when the night is still alive.
-    ctx.fillStyle = dawn ? '#5a4632' : '#ffb347';
+    // Ridge cap.
+    ctx.fillStyle = '#5a3a32';
+    ctx.fillRect(624, 70, 32, 10);
+    // Door, warm when the night is still alive, with a dark frame.
+    ctx.fillStyle = '#241d1a';
+    ctx.fillRect(602, 226, 76, 114);
+    ctx.fillStyle = dawn ? '#5a4632' : '#e8a04c';
     ctx.fillRect(608, 232, 64, 108);
     ctx.fillStyle = '#241d1a';
     ctx.fillRect(636, 232, 8, 108);
+    ctx.fillRect(608, 282, 64, 5);
     // Two windows.
     for (const wx of [420, 800]) {
       ctx.fillStyle = dawn ? '#3a2f28' : '#ffd98a';
@@ -103,6 +116,33 @@ export function createRenderer(canvas) {
       ctx.ellipse(640, y, 26, 10, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Courtyard details: grass tufts, stones, a water jar by the wall.
+    ctx.strokeStyle = '#2e3d24';
+    ctx.lineWidth = 2;
+    for (const [gx, gy] of [[120, 420], [150, 430], [1080, 420], [1110, 430], [180, 620], [1120, 620], [520, 640], [760, 640]]) {
+      ctx.beginPath();
+      ctx.moveTo(gx - 5, gy);
+      ctx.lineTo(gx - 7, gy - 9);
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx, gy - 11);
+      ctx.moveTo(gx + 5, gy);
+      ctx.lineTo(gx + 7, gy - 9);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#3a4432';
+    for (const [sx, sy, sr] of [[200, 480, 7], [1040, 500, 6], [880, 630, 8], [400, 630, 6]]) {
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, sr, sr * 0.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#4a3a2c';
+    ctx.beginPath();
+    ctx.ellipse(180, 332, 22, 26, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2e2118';
+    ctx.beginPath();
+    ctx.ellipse(180, 314, 16, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function lantern(x, lit, time) {
@@ -150,15 +190,15 @@ export function createRenderer(canvas) {
 
   function keeper(k) {
     const cx = k.x + k.width / 2;
-    // Small hand lantern, swinging.
+    // Small hand lantern, swinging at his side.
     const swing = Math.sin(performance.now() / 300) * 4;
-    ctx.fillStyle = 'rgba(255, 179, 71, 0.35)';
+    ctx.fillStyle = 'rgba(255, 179, 71, 0.22)';
     ctx.beginPath();
-    ctx.arc(cx + 26 + swing, k.y + 30, 30, 0, Math.PI * 2);
+    ctx.arc(cx + 24 + swing, k.y + 34, 18, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = PALETTE.lanternLit;
     ctx.beginPath();
-    ctx.arc(cx + 26 + swing, k.y + 30, 7, 0, Math.PI * 2);
+    ctx.arc(cx + 24 + swing, k.y + 34, 6, 0, Math.PI * 2);
     ctx.fill();
     // Coat.
     ctx.fillStyle = PALETTE.keeperCoat;
@@ -187,8 +227,17 @@ export function createRenderer(canvas) {
     const cx = enemy.x + enemy.width / 2;
     const cy = enemy.y + enemy.height / 2;
     const flap = Math.sin(enemy.phase * 2) * 0.5;
+    // Fade in as it drops out of the night, so it never pops in.
     ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, (enemy.y + enemy.height + 10) / 50));
     ctx.translate(cx, cy);
+    if (enemy.kind === 'dart') {
+      // A short trail behind a darting moth.
+      ctx.fillStyle = 'rgba(201, 160, 220, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(0, -18, 8, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     if (enemy.kind === 'shade') {
       ctx.fillStyle = PALETTE.shade;
       ctx.beginPath();
@@ -233,8 +282,12 @@ export function createRenderer(canvas) {
     const cx = fly.x + fly.width / 2;
     const cy = fly.y + fly.height / 2;
     const glow = 0.6 + 0.4 * Math.sin(fly.phase * 2);
-    ctx.globalAlpha = glow;
+    ctx.globalAlpha = glow * 0.35;
     ctx.fillStyle = PALETTE.firefly;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = glow;
     ctx.beginPath();
     ctx.arc(cx, cy, 9, 0, Math.PI * 2);
     ctx.fill();
@@ -268,7 +321,7 @@ export function createRenderer(canvas) {
     ctx.fillRect(0, 0, FIELD.width, 54);
     text(`第 ${Math.min(state.wave, WAVES.total)} / ${WAVES.total} 波`, 110, 28, 22, PALETTE.text, 'center');
     text(`分数 ${state.score}`, 330, 28, 22, PALETTE.text, 'center');
-    text(`萤火 ${state.fireflies}  ·  点灯按 1 / 2 / 3（1 萤火）`, 640, 28, 20, PALETTE.muted, 'center');
+    text(`萤火 ${state.fireflies}  ·  到灭灯前按 1 / 2 / 3（2 萤火）`, 640, 28, 20, PALETTE.muted, 'center');
     text(`最佳 ${best}`, 1000, 28, 20, PALETTE.muted, 'center');
     // Lantern icons, lit or dark.
     for (let i = 0; i < 3; i += 1) {
@@ -280,6 +333,8 @@ export function createRenderer(canvas) {
     }
     if (state.betweenWaves > 0) {
       text(`下一波 ${Math.ceil(state.betweenWaves)} 秒`, 640, 84, 22, PALETTE.lanternCore, 'center');
+    } else if (state.wave === 1 && state.waveTime < 5) {
+      text('飞蛾来了，移到它前面就能撞掉它', 640, 84, 20, PALETTE.lanternCore, 'center');
     }
   }
 
@@ -302,14 +357,14 @@ export function createRenderer(canvas) {
     if (screen === SCREEN_TITLE) {
       ctx.fillStyle = 'rgba(8, 10, 28, 0.45)';
       ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-      panel(290, 150, 700, 400);
-      text('灯火守夜人', 640, 215, 56, PALETTE.lanternCore, 'center');
-      text('LANTERN KEEPER', 640, 262, 20, PALETTE.muted, 'center');
-      text('飞蛾扑向屋前的三盏灯，守住它们，等到天亮。', 640, 315, 22, PALETTE.text, 'center');
-      text('移动：鼠标 / 方向键　　点灯：1 / 2 / 3 键', 640, 355, 20, PALETTE.text, 'center');
-      text('撞飞蛾得分，捡萤火攒点灯的柴火，撑过 10 波。', 640, 390, 20, PALETTE.text, 'center');
-      text('按 空格 或 点击 开始', 640, 465, 26, PALETTE.lanternLit, 'center');
-      text(`最佳 ${best}`, 640, 510, 18, PALETTE.muted, 'center');
+      panel(290, 130, 700, 380);
+      text('灯火守夜人', 640, 195, 56, PALETTE.lanternCore, 'center');
+      text('LANTERN KEEPER', 640, 242, 20, PALETTE.muted, 'center');
+      text('飞蛾扑向屋前的三盏灯，守住它们，等到天亮。', 640, 295, 22, PALETTE.text, 'center');
+      text('移动：鼠标 / 方向键　　点灯：走到灭灯前按 1 / 2 / 3（2 萤火）', 640, 335, 20, PALETTE.text, 'center');
+      text('撞飞蛾得分，捡萤火攒点灯的柴火，撑过 10 波。', 640, 370, 20, PALETTE.text, 'center');
+      text('按 空格 或 点击 开始', 640, 445, 26, PALETTE.lanternLit, 'center');
+      text(`最佳 ${best}`, 640, 490, 18, PALETTE.muted, 'center');
     } else if (screen === SCREEN_PAUSED) {
       ctx.fillStyle = 'rgba(8, 10, 28, 0.55)';
       ctx.fillRect(0, 0, FIELD.width, FIELD.height);
